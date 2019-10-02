@@ -1,5 +1,6 @@
 import dataclasses
 import os
+import time
 from dataclasses import dataclass
 from typing import List
 
@@ -195,6 +196,8 @@ def compute_pv_props(
     # Run QC calculations and get predictions based on Scharber model
     for i, atoms in enumerate(atoms_list):
         try:
+            start_time = time.time()
+
             c = calculator.Calculator(atoms=atoms, charge=charge, basis=basis_set, xc=xc_functional)
             atoms_opt = calculator.optimize(c)
 
@@ -207,6 +210,7 @@ def compute_pv_props(
             report = calculator.generate_report(c2)
             report.update(dataclasses.asdict(scharber))
             report['smiles'] = smiles
+            report['elapsed'] = time.time() - start_time
 
             reports.append(report)
 
