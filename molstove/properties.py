@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 import pandas as pd
+import pkg_resources
 import scipy.integrate
 from scipy.constants import Planck  # J * s
 from scipy.constants import elementary_charge  # Coulomb per electron
@@ -12,9 +13,11 @@ from scipy.constants import speed_of_light  # m / s
 
 from molstove import tools, calculator, conformers
 
+RESOURCES_FOLDER = 'resources'
+
 # Reference Solar Spectral Irradiance: ASTM G-173
 # from https://rredc.nrel.gov/solar//spectra/am1.5/ASTMG173/ASTMG173.html
-ASTMG173_FILE_NAME = 'resources/ASTMG173.csv'
+ASTMG173_FILE_NAME = 'ASTMG173.csv'
 
 INPUT_POWER = 100.037065557  # mW cm^-2
 
@@ -54,7 +57,7 @@ def load_astm_data() -> pd.DataFrame:
     m_per_nm = 1E-9  # m / nm
     mA_per_A = 1000  # mA / A
 
-    path = os.path.abspath(os.path.join(os.path.dirname(__file__), ASTMG173_FILE_NAME))
+    path = pkg_resources.resource_filename(__package__, os.path.join(RESOURCES_FOLDER, ASTMG173_FILE_NAME))
 
     # Wavelength (nm) and spectral radiations (W * m^-2 * nm^-1)
     astm = pd.read_csv(path, header=0, skiprows=1, names=['wavelength', 'ETR', 'global_tilt', 'direct'])
