@@ -76,7 +76,7 @@ def hook() -> None:
     args = parser.parse_args()
 
     report_collection: List[dict] = []
-    for smiles in args.smiles.split('.'):
+    for smiles in args.smiles.split(','):
         reports = properties.compute_pv_props(
             smiles=smiles,
             seed=args.seed,
