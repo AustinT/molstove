@@ -32,4 +32,7 @@ setup(
         'scipy',
     ],
     zip_safe=False,
+    entry_points={
+        'console_scripts': ['molstove = molstove.main:hook'],
+    },
 )
