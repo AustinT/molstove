@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Any
 
 import numpy as np
 from pyscf import gto, dft
@@ -83,3 +83,17 @@ def optimize(calculator: Calculator) -> List[List]:
         converted.append(atom)
 
     return converted
+
+
+def generate_report(c: Calculator) -> Dict[str, Any]:
+    homo, lumo = c.get_homo_lumo()
+    return {
+        'atoms': c.mol.atom,
+        'charge': c.mol.charge,
+        'spin_multiplicity': c.mol.spin,
+        'basis': c.mol.basis,
+        'xc_functional': c.mf.xc,
+        'energy': c.get_energy(),
+        'homo': homo,
+        'lumo': lumo,
+    }

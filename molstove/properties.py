@@ -1,5 +1,7 @@
+import dataclasses
 import os
 from dataclasses import dataclass
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -8,7 +10,7 @@ from scipy.constants import Planck  # J * s
 from scipy.constants import elementary_charge  # Coulomb per electron
 from scipy.constants import speed_of_light  # m / s
 
-from molstove import tools
+from molstove import tools, calculator, conformers
 
 # Reference Solar Spectral Irradiance: ASTM G-173
 # from https://rredc.nrel.gov/solar//spectra/am1.5/ASTMG173/ASTMG173.html
@@ -139,3 +141,73 @@ def calculate_scharber_props(
         e_charge_sep=e_charge_sep,
         e_empirical_loss=e_empirical_loss,
     )
+
+
+def compute_pv_props(
+        smiles: str,
+        seed: int,
+        max_num_conformers: int,
+        rmsd_threshold: float,
+        delta_e_threshold: float,
+        energy_window: float,
+        max_num_opt_conformers: int,
+        basis_set: str,
+        xc_functional: str,
+) -> List[dict]:
+    """
+    Compute photovoltaic properties.
+
+    :param smiles: SMILES representation of molecule
+    :param seed: random seed for conformer generation
+    :param max_num_conformers: maximum number of conformers generated
+    :param rmsd_threshold: minimum RMSD between two conformers to be considered different (in Angstrom)
+    :param delta_e_threshold: minimum energy difference between to be considered different (in kcal/mol)
+    :param energy_window: maximum energy difference the most stable conformer and any other conformer (in kcal/mol)
+    :param max_num_opt_conformers: maximum number of optimized conformers
+    :param basis_set: basis set used for QC calculations
+    :param xc_functional: XC functional used for QC calculations
+    :return: list of reports, one for each conformer
+    """
+    # Generate molecule from SMILES
+    mol = tools.mol_from_smiles(smiles)
+
+    # Generate conformers
+    conformers.generate_conformers(mol, max_num_conformers=max_num_conformers, seed=seed)
+    energies = conformers.minimize_conformers(mol)
+    conformer_list = conformers.collect_clusters(
+        mol=mol,
+        energies=energies,
+        rmsd_threshold=rmsd_threshold,
+        delta_e_threshold=delta_e_threshold,
+        energy_window=energy_window,
+        max_num_conformers=max_num_opt_conformers,
+    )
+
+    # Convert conformers to PySCF format
+    atoms_list = [tools.conformer_to_atoms(mol=mol, conformer=conformer) for conformer in conformer_list]
+    charge = tools.get_molecular_charge(mol)
+
+    reports = []
+
+    # Run QC calculations and get predictions based on Scharber model
+    for i, atoms in enumerate(atoms_list):
+        try:
+            c = calculator.Calculator(atoms=atoms, charge=charge, basis=basis_set, xc=xc_functional)
+            atoms_opt = calculator.optimize(c)
+
+            c2 = calculator.Calculator(atoms=atoms_opt, charge=charge, basis=basis_set, xc=xc_functional)
+            c2.run()
+
+            homo, lumo = c2.get_homo_lumo()
+            scharber = calculate_scharber_props(homo=homo, lumo=lumo)
+
+            report = calculator.generate_report(c2)
+            report.update(dataclasses.asdict(scharber))
+            report['smiles'] = smiles
+
+            reports.append(report)
+
+        except RuntimeError as e:
+            print(f'Calculations for conformer {i} failed: {e}')
+
+    return reports

@@ -1,72 +1,7 @@
 import argparse
-import dataclasses
-from typing import Dict, Any, List
+from typing import List
 
-from molstove import tools, conformers, calculator, properties
-
-
-def generate_report(c: calculator.Calculator) -> Dict[str, Any]:
-    homo, lumo = c.get_homo_lumo()
-    return {
-        'atoms': c.mol.atom,
-        'charge': c.mol.charge,
-        'spin_multiplicity': c.mol.spin,
-        'basis': c.mol.basis,
-        'xc_functional': c.mf.xc,
-        'energy': c.get_energy(),
-        'homo': homo,
-        'lumo': lumo,
-    }
-
-
-def main(args) -> List[dict]:
-    # Generate molecule from SMILES
-    mol = tools.mol_from_smiles(args.smiles)
-
-    # Generate conformers
-    conformers.generate_conformers(mol, max_num_conformers=args.max_num_conformers, seed=args.seed)
-    energies = conformers.minimize_conformers(mol)
-    conformer_list = conformers.collect_clusters(
-        mol=mol,
-        energies=energies,
-        rmsd_threshold=args.rmsd_threshold,
-        delta_e_threshold=args.delta_e_threshold,
-        energy_window=args.energy_window,
-        max_num_conformers=args.max_num_opt_conformers,
-    )
-
-    # Convert conformers to PySCF format
-    atoms_list = [tools.conformer_to_atoms(mol=mol, conformer=conformer) for conformer in conformer_list]
-    charge = tools.get_molecular_charge(mol)
-
-    reports = []
-
-    # Run QC calculations and get predictions based on Scharber model
-    for i, atoms in enumerate(atoms_list):
-        try:
-            c = calculator.Calculator(atoms=atoms, charge=charge, basis=args.basis_set, xc=args.xc_functional)
-            atoms_opt = calculator.optimize(c)
-
-            c2 = calculator.Calculator(atoms=atoms_opt, charge=charge, basis=args.basis_set, xc=args.xc_functional)
-            c2.run()
-
-            homo, lumo = c2.get_homo_lumo()
-            scharber = properties.calculate_scharber_props(homo=homo, lumo=lumo)
-
-            report = generate_report(c2)
-            report.update(dataclasses.asdict(scharber))
-            report['smiles'] = args.smiles
-
-            tools.write_to_json(report, path=f'report_{i}.json')
-
-            reports.append(report)
-
-        except RuntimeError as e:
-            print(f'Calculations for conformer {i} failed: {e}')
-
-    tools.write_to_json(reports, path='report.json')
-
-    return reports
+from molstove import tools, properties
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -139,7 +74,24 @@ def get_parser() -> argparse.ArgumentParser:
 def hook() -> None:
     parser = get_parser()
     args = parser.parse_args()
-    main(args)
+
+    report_collection: List[dict] = []
+    for smiles in args.smiles.split('.'):
+        reports = properties.compute_pv_props(
+            smiles=smiles,
+            seed=args.seed,
+            max_num_conformers=args.max_num_conformers,
+            rmsd_threshold=args.rmsd_threshold,
+            delta_e_threshold=args.delta_e_threshold,
+            energy_window=args.energy_window,
+            max_num_opt_conformers=args.max_num_opt_conformers,
+            basis_set=args.basis_set,
+            xc_functional=args.xc_functional,
+        )
+
+        report_collection += reports
+
+    tools.write_to_json(report_collection, 'results.json')
 
 
 if __name__ == '__main__':
