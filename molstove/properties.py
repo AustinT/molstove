@@ -204,7 +204,12 @@ def compute_pv_props(
             c2 = calculator.Calculator(atoms=atoms_opt, charge=charge, basis=basis_set, xc=xc_functional)
             c2.run()
 
-            homo, lumo = c2.get_homo_lumo()
+            homo, lumo = c2.get_homo_lumo()  # in Hartree
+
+            # Convert energies to eV
+            homo *= tools.EV_PER_HARTREE
+            lumo *= tools.EV_PER_HARTREE
+
             scharber = calculate_scharber_props(homo=homo, lumo=lumo)
 
             report = calculator.generate_report(c2)
