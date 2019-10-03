@@ -65,7 +65,7 @@ def get_parser() -> argparse.ArgumentParser:
         '--xc_functional',
         help='XC functional employed in QC calculations',
         type=str,
-        default='PBE',
+        default='BP86',
         required=False,
     )
     return parser
