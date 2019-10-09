@@ -26,7 +26,6 @@ class TestScharber(TestCase):
         self.assertAlmostEqual(properties.max_jsc(lumo - homo), 3.2613212)
 
         scharber = properties.calculate_scharber_props(homo=homo, lumo=lumo)
-        self.assertAlmostEqual(properties.max_jsc(lumo - homo), 3.2613212)
         self.assertAlmostEqual(scharber.pce, 1.39117166)
         self.assertAlmostEqual(scharber.voc, 1.01)
         self.assertAlmostEqual(scharber.jsc, 2.1198588)
