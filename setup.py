@@ -31,7 +31,6 @@ setup(
         'scipy',
     ],
     zip_safe=False,
-    entry_points={
-        'console_scripts': ['molstove = molstove.main:hook'],
-    },
+    test_suite='pytest',
+    tests_require=['pytest']
 )
