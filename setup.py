@@ -32,5 +32,5 @@ setup(
     ],
     zip_safe=False,
     test_suite='pytest',
-    tests_require=['pytest']
+    tests_require=['pytest'],
 )
