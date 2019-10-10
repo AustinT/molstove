@@ -1,28 +1,28 @@
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, Dict, Any
 
 import numpy as np
 from pyscf import gto, dft
 
 from molstove import tools
+from molstove.tools import Atoms, Atom
 
 
 class Calculator:
-    def __init__(self, atoms, charge: int, basis: str, xc: str, unit='Ang'):
+    def __init__(self, atoms: Atoms, charge: int, basis: str, xc: str):
         """
         Construct PySCF calculator
 
-        :param atoms: atoms (in unit <unit> and PySCF format)
+        :param atoms: atoms (in Angstrom)
         :param charge: charge of system
         :param basis: orbital basis
         :param xc: exchange correlation functional
-        :param unit: unit of atoms (Ang or Bohr)
         """
         self.mol = gto.Mole()
-        self.mol.atom = atoms
+        self.mol.atom = [(atom.element, [atom.x, atom.y, atom.z]) for atom in atoms]
         self.mol.charge = charge
         self.mol.spin = 0  # singlet
         self.mol.basis = basis
-        self.mol.build(unit=unit)
+        self.mol.build(unit='Ang')
 
         # Density fitting not possible as nuclear gradients are not implemented
         self.mf = dft.RKS(self.mol)
@@ -67,7 +67,7 @@ class Calculator:
         return np.sqrt(np.sum(np.square(dipole_moment)))
 
 
-def optimize(calculator: Calculator) -> List[List]:
+def optimize(calculator: Calculator) -> Atoms:
     """
     Perform structure optimization of molecule in calculator.
 
@@ -79,8 +79,8 @@ def optimize(calculator: Calculator) -> List[List]:
 
     converted = []
     for element, coord in atoms:
-        atom = [element, tuple(i * tools.ANGSTROM_PER_BOHR for i in coord)]
-        converted.append(atom)
+        pos = tuple(i * tools.ANGSTROM_PER_BOHR for i in coord)
+        converted.append(Atom(element, pos[0], pos[1], pos[2]))
 
     return converted
 

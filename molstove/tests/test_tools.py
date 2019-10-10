@@ -18,6 +18,3 @@ class TestTools(TestCase):
         atoms = tools.conformer_to_atoms(mol, mol.GetConformer(0))
 
         self.assertEqual(len(atoms), 5)
-        for atom in atoms:
-            self.assertEqual(len(atom), 2)
-            self.assertEqual(len(atom[1]), 3)

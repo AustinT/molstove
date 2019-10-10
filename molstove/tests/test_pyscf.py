@@ -1,16 +1,17 @@
 from unittest import TestCase
 
-from molstove import calculator, tools, conformers
+from molstove import pyscf, tools, conformers
+from molstove.tools import Atom
 
 
-class TestSCF(TestCase):
+class TestPySCFSinglePoint(TestCase):
     def test_h2(self):
         atoms = [
-            ['H', (0, 0, 0)],
-            ['H', (0, 0, 1.2)],
+            Atom('H', 0, 0, 0),
+            Atom('H', 0, 0, 1.2),
         ]
 
-        c = calculator.Calculator(atoms=atoms, charge=0, basis='def2-SVP', xc='PBE')
+        c = pyscf.Calculator(atoms=atoms, charge=0, basis='def2-SVP', xc='PBE')
         c.run()
 
         self.assertAlmostEqual(c.get_energy(), -1.1060139202294401)
@@ -20,7 +21,7 @@ class TestSCF(TestCase):
         self.assertAlmostEqual(c.get_dipole_moment(), 0)
 
 
-class TestOptimizer(TestCase):
+class TestPySCFOptimizer(TestCase):
     def test_nh3(self):
         mol = tools.mol_from_smiles('N')
         conformers.generate_conformers(mol, max_num_conformers=5, seed=42)
@@ -28,13 +29,13 @@ class TestOptimizer(TestCase):
         atoms_list = [tools.conformer_to_atoms(mol=mol, conformer=conformer) for conformer in mol.GetConformers()]
 
         for atoms in atoms_list:
-            c1 = calculator.Calculator(atoms=atoms, charge=0, basis='def2-SVP', xc='PBE')
+            c1 = pyscf.Calculator(atoms=atoms, charge=0, basis='def2-SVP', xc='PBE')
             c1.run()
             energy = c1.get_energy()
 
-            atoms_opt = calculator.optimize(c1)
+            atoms_opt = pyscf.optimize(c1)
 
-            c2 = calculator.Calculator(atoms=atoms_opt, charge=0, basis='def2-SVP', xc='PBE')
+            c2 = pyscf.Calculator(atoms=atoms_opt, charge=0, basis='def2-SVP', xc='PBE')
             c2.run()
             energy_opt = c2.get_energy()
 
