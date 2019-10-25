@@ -46,7 +46,7 @@ def compute_pv_props(
     # Run QC calculations and get predictions based on Scharber model
     for i, atoms in enumerate(atoms_list):
         try:
-            start_time = time.time()
+            opt_start = time.time()
 
             c = orca.StructureOptCalculator(
                 atoms=atoms,
@@ -61,7 +61,11 @@ def compute_pv_props(
             opt_results = c.parse_results()
             opt_atoms = opt_results.atoms
 
+            opt_time = time.time() - opt_start
+
             for sp_settings in sp_settings_list:
+                sp_start = time.time()
+
                 c = orca.SinglePointCalculator(
                     atoms=opt_atoms,
                     charge=charge,
@@ -74,6 +78,8 @@ def compute_pv_props(
                 c.run()
                 sp_results = c.parse_results()
                 homo, lumo = sp_results.homo, sp_results.lumo
+
+                sp_time = time.time() - sp_start
 
                 method = f'{opt_settings.method}/{opt_settings.basis_set}//' \
                          f'{sp_settings.method}/{sp_settings.basis_set}'
@@ -98,7 +104,8 @@ def compute_pv_props(
 
                 report.update(dataclasses.asdict(scharber))
                 report['smiles'] = smiles
-                report['elapsed'] = time.time() - start_time
+                report['opt_time'] = opt_time
+                report['sp_time'] = sp_time
 
                 reports.append(report)
 
@@ -146,6 +153,7 @@ def main():
                             num_processors=num_processors))
 
     for i, smiles in enumerate(smiles_list):
+        print(smiles)
         try:
             report = compute_pv_props(smiles, opt_settings=opt_settings, sp_settings_list=sp_settings_list)
             with open(f'report_{i}.json', mode='w') as f:
