@@ -2,9 +2,11 @@ import argparse
 import glob
 import os
 
+import numpy as np
 import pandas as pd
 
-from molstove import properties, tools
+from molstove import tools
+from molstove.properties import calibrate_homo, calibrate_lumo, calculate_scharber_props
 
 reference = {
     'c1coc(c1)-c1cc2sc3c(c4c[nH]cc4c4ccc5cscc5c34)c2c2ccccc12': 2.110,
@@ -20,6 +22,14 @@ reference = {
 }
 
 
+def new_scharber(row: pd.Series) -> float:
+    method = f'BP86/def2-SVP//{row["xc"]}/def2-SVP'
+    homo = calibrate_homo(homo=row['homo'] * tools.EV_PER_HARTREE, method=method)
+    lumo = calibrate_lumo(lumo=row['lumo'] * tools.EV_PER_HARTREE, method=method)
+
+    return calculate_scharber_props(homo=homo, lumo=lumo).pce
+
+
 def main(directory: str) -> None:
     # Collect all JSON files
     json_files = glob.glob(os.path.join(directory, 'report_*.json'))
@@ -29,17 +39,9 @@ def main(directory: str) -> None:
         frames.append(pd.read_json(file))
 
     df = pd.concat(frames)
+    df = df[df['xc'] != 'PBE']
 
-    df['pce*'] = df.apply(
-        axis='columns',
-        func=lambda r: properties.calculate_scharber_props(
-            homo=r['homo'] * tools.EV_PER_HARTREE,
-            lumo=r['lumo'] * tools.EV_PER_HARTREE,
-            eqe=1.0,
-            ff=1.0,
-            e_empirical_loss=0.0,
-        ).pce,
-    )
+    df['pce_calibrated'] = df.apply(axis='columns', func=new_scharber)
 
     # Join with reference data
     reference_series = pd.Series(reference)
@@ -48,9 +50,11 @@ def main(directory: str) -> None:
     df = df.join(reference_series, how='left', on='smiles')
     df = df.reset_index()
 
+    df = df.groupby('smiles').agg(np.mean)
+
     with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None, 'max_colwidth',
                            100):
-        print(df[['smiles', 'xc', 'pce', 'pce*', 'pce_ref', 'elapsed']])
+        print(df[['pce_calibrated', 'pce_ref']])
 
 
 if __name__ == '__main__':

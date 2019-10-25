@@ -4,14 +4,23 @@ import time
 from typing import List
 
 from molstove import tools, conformers, orca, properties
-
-num_processors = 4
-basis_set = 'def2-SVP def2/J'
-spin_multiplicity = 1
-functionals = ['B3LYP', 'BP86', 'PBE', 'PBE0']
+from molstove.properties import calibrate_homo, calibrate_lumo
 
 
-def compute_pv_props(smiles: str) -> List[dict]:
+@dataclasses.dataclass
+class CalculationSettings:
+    method: str
+    basis_set: str
+    aux_basis_set: str
+    open_shell: bool = False
+    num_processors: int = 4
+
+
+def compute_pv_props(
+        smiles: str,
+        opt_settings: CalculationSettings,
+        sp_settings_list: List[CalculationSettings],
+) -> List[dict]:
     # Generate molecule from SMILES
     mol = tools.mol_from_smiles(smiles)
 
@@ -30,6 +39,7 @@ def compute_pv_props(smiles: str) -> List[dict]:
     # Convert conformers to PySCF format
     atoms_list = [tools.conformer_to_atoms(mol=mol, conformer=conformer) for conformer in conformer_list]
     charge = tools.get_molecular_charge(mol)
+    spin_multiplicity = 1
 
     reports = []
 
@@ -38,37 +48,48 @@ def compute_pv_props(smiles: str) -> List[dict]:
         try:
             start_time = time.time()
 
-            c = orca.StructureOptCalculator(atoms=atoms,
-                                            charge=charge,
-                                            spin_multiplicity=spin_multiplicity,
-                                            basis=basis_set,
-                                            xc='BP86',
-                                            num_processes=num_processors)
+            c = orca.StructureOptCalculator(
+                atoms=atoms,
+                charge=charge,
+                spin_multiplicity=spin_multiplicity,
+                basis=f'{opt_settings.basis_set} {opt_settings.aux_basis_set}',
+                method=opt_settings.method,
+                open_shell=opt_settings.open_shell,
+                num_processes=opt_settings.num_processors,
+            )
             c.run()
             opt_results = c.parse_results()
             opt_atoms = opt_results.atoms
 
-            for functional in functionals:
-                c = orca.SinglePointCalculator(atoms=opt_atoms,
-                                               charge=charge,
-                                               spin_multiplicity=spin_multiplicity,
-                                               basis=basis_set,
-                                               xc=functional,
-                                               num_processes=num_processors)
+            for sp_settings in sp_settings_list:
+                c = orca.SinglePointCalculator(
+                    atoms=opt_atoms,
+                    charge=charge,
+                    spin_multiplicity=spin_multiplicity,
+                    basis=f'{sp_settings.basis_set} {sp_settings.aux_basis_set}',
+                    method=sp_settings.method,
+                    open_shell=sp_settings.open_shell,
+                    num_processes=sp_settings.num_processors,
+                )
                 c.run()
                 sp_results = c.parse_results()
                 homo, lumo = sp_results.homo, sp_results.lumo
 
-                scharber = properties.calculate_scharber_props(homo=homo * tools.EV_PER_HARTREE,
-                                                               lumo=lumo * tools.EV_PER_HARTREE)
+                method = f'{opt_settings.method}/{opt_settings.basis_set}//' \
+                         f'{sp_settings.method}/{sp_settings.basis_set}'
+                homo_calibrated = calibrate_homo(homo=homo * tools.EV_PER_HARTREE, method=method)
+                lumo_calibrated = calibrate_lumo(lumo=lumo * tools.EV_PER_HARTREE, method=method)
+                scharber = properties.calculate_scharber_props(homo=homo_calibrated, lumo=lumo_calibrated)
 
                 report = {
                     'smiles': smiles,
                     'atoms': [dataclasses.asdict(atom) for atom in opt_atoms],
                     'charge': charge,
                     'spin_multiplicity': spin_multiplicity,
-                    'basis_set': basis_set,
-                    'xc': functional,
+                    'basis_set': sp_settings.basis_set,
+                    'basis_set_opt': opt_settings.basis_set,
+                    'method': sp_settings.method,
+                    'method_opt': opt_settings.method,
                     'homo': homo,
                     'lumo': lumo,
                     'energy': sp_results.energy,
@@ -88,6 +109,8 @@ def compute_pv_props(smiles: str) -> List[dict]:
 
 
 def main():
+    num_processors = 1
+
     smiles_list = [
         'c1coc(c1)-c1cc2sc3c(c4c[nH]cc4c4ccc5cscc5c34)c2c2ccccc12',
         '[SiH2]1C=c2c3cc[nH]c3c3ccc4cc(-c5scc6cc[nH]c56)c5cscc5c4c3c2=C1',
@@ -101,9 +124,30 @@ def main():
         'C1C=Cc2c1csc2-c1cc2cnc3c4[nH]ccc4c4=C[SiH2]C=c4c3c2c2=C[SiH2]C=c12',
     ]
 
+    opt_settings = CalculationSettings(method='BP86',
+                                       basis_set='def2-SVP',
+                                       aux_basis_set='def2/J',
+                                       num_processors=num_processors)
+
+    sp_settings_list = [
+        CalculationSettings(method=method, basis_set='def2-SVP', aux_basis_set='def2/J', num_processors=num_processors)
+        for method in ['BP86', 'B3LYP', 'PBE0', 'BHANDHLYP', 'M062X', 'RHF']
+    ]
+
+    sp_settings_list.append(
+        CalculationSettings(method='UHF',
+                            basis_set='def2-SVP',
+                            aux_basis_set='def2/J',
+                            open_shell=True,
+                            num_processors=num_processors))
+
+    sp_settings_list.append(
+        CalculationSettings(method='BP86', basis_set='def2-TZVP', aux_basis_set='def2/J',
+                            num_processors=num_processors))
+
     for i, smiles in enumerate(smiles_list):
         try:
-            report = compute_pv_props(smiles)
+            report = compute_pv_props(smiles, opt_settings=opt_settings, sp_settings_list=sp_settings_list)
             with open(f'report_{i}.json', mode='w') as f:
                 json.dump(report, f)
         except Exception as e:
