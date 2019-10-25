@@ -1,3 +1,1 @@
-# MolStove - Tiny Script for Calculating PCEs for Molecules
-
-
+# MolStove - Program for Calculating Molecular Properties
