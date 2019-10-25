@@ -46,3 +46,14 @@ class TestOrcaParser(TestCase):
         self.assertEqual(len(orbitals), 297)
         self.assertAlmostEqual(orbitals[33].occupation, 2.0)
         self.assertAlmostEqual(orbitals[34].occupation, 0.0)
+
+    def test_open_shell_parsers(self):
+        p = OrcaParser(directory=self.RESOURCES, output_file_name='open_orbitals.output')
+        orbitals_list = p.get_open_shell_orbitals()
+
+        self.assertEqual(len(orbitals_list), 1)
+
+        orbitals = orbitals_list[0]
+        self.assertEqual(len(orbitals), 20)
+        self.assertAlmostEqual(orbitals[0].occupation, 1.0)
+        self.assertAlmostEqual(orbitals[3].occupation, 0.0)

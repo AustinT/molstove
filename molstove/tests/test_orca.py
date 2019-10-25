@@ -52,3 +52,19 @@ class TestOrca(TestCase):
         c.run()
         results = c.parse_results()
         self.assertEqual(len(results.atoms), 2)
+
+    def test_h2_minus_uhf(self):
+        c = orca.SinglePointCalculator(
+            self.atoms,
+            charge=-1,
+            spin_multiplicity=2,
+            method='UHF',
+            basis='def2-SVP',
+            num_processes=1,
+            open_shell=True,
+            base_dir=self.test_dir,
+        )
+        c.run()
+        results = c.parse_results()
+        self.assertAlmostEqual(results.homo, 0.078217)
+        self.assertAlmostEqual(results.lumo, 0.449897)
