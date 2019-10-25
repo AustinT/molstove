@@ -12,14 +12,17 @@ from molstove.tools import Atoms
 
 
 class Calculator(abc.ABC):
-    def __init__(self,
-                 atoms: Atoms,
-                 charge: int,
-                 spin_multiplicity: int,
-                 basis: str,
-                 method: str,
-                 num_processes: int = 1,
-                 base_dir: Optional[str] = None):
+    def __init__(
+            self,
+            atoms: Atoms,
+            charge: int,
+            spin_multiplicity: int,
+            basis: str,
+            method: str,
+            open_shell: bool = False,
+            num_processes: int = 1,
+            base_dir: Optional[str] = None,
+    ):
         """
         Construct Orca calculator
 
@@ -28,6 +31,7 @@ class Calculator(abc.ABC):
         :param spin_multiplicity: spin multiplicity of system
         :param basis: orbital basis
         :param method: method to be employed (e.g., exchange correlation functional for DFT)
+        :param open_shell: boolean indicating if the calculation is open shell
         :param num_processes: number of mpi processes
         :param base_dir: base directory of calculation
         """
@@ -37,6 +41,7 @@ class Calculator(abc.ABC):
 
         self.basis = basis
         self.method = method
+        self.open_shell = open_shell
 
         if base_dir is None:
             base_dir = os.getcwd()
@@ -131,7 +136,11 @@ class SinglePointCalculator(Calculator):
         p = parser.OrcaParser(directory=self.calculation_directory, output_file_name=self.output_file_name)
         p.sanity_check()
 
-        orbitals = p.get_last_orbitals()
+        if not self.open_shell:
+            orbitals = p.get_last_orbitals()
+        else:
+            orbitals = p.get_last_open_shell_orbitals()
+
         homo, lumo = self._get_homo_lumo_energies(orbitals)
 
         return SCFResult(
@@ -140,11 +149,11 @@ class SinglePointCalculator(Calculator):
             lumo=lumo,
         )
 
-    @staticmethod
-    def _get_homo_lumo_energies(orbitals: List[Orbital]) -> Tuple[float, float]:
+    def _get_homo_lumo_energies(self, orbitals: List[Orbital]) -> Tuple[float, float]:
         homo, lumo = 0.0, 0.0
+        occupied = 1.0 if self.open_shell else 2.0
         for i, orbital in enumerate(orbitals):
-            if np.isclose(orbital.occupation, 2.0):
+            if np.isclose(orbital.occupation, occupied):
                 homo = orbital.energy
             elif np.isclose(orbital.occupation, 0.0):
                 lumo = orbital.energy
