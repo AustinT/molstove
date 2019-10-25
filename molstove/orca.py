@@ -17,7 +17,7 @@ class Calculator(abc.ABC):
                  charge: int,
                  spin_multiplicity: int,
                  basis: str,
-                 xc: str,
+                 method: str,
                  num_processes: int = 1,
                  base_dir: Optional[str] = None):
         """
@@ -27,7 +27,7 @@ class Calculator(abc.ABC):
         :param charge: charge of system
         :param spin_multiplicity: spin multiplicity of system
         :param basis: orbital basis
-        :param xc: exchange correlation functional
+        :param method: method to be employed (e.g., exchange correlation functional for DFT)
         :param num_processes: number of mpi processes
         :param base_dir: base directory of calculation
         """
@@ -36,7 +36,7 @@ class Calculator(abc.ABC):
         self.spin_multiplicity = spin_multiplicity
 
         self.basis = basis
-        self.xc = xc
+        self.method = method
 
         if base_dir is None:
             base_dir = os.getcwd()
@@ -69,9 +69,9 @@ class Calculator(abc.ABC):
         raise NotImplementedError
 
     @staticmethod
-    def _render_input(atoms: List, charge: int, spin_multiplicity: int, xc: str, basis: str, job: str,
+    def _render_input(atoms: List, charge: int, spin_multiplicity: int, method: str, basis: str, job: str,
                       num_processes: int) -> str:
-        header = f'! {xc} {basis} {job}\n'
+        header = f'! {method} {basis} {job}\n'
         processes_settings = f'%pal\nnprocs {num_processes}\nend\n'
         scf_settings = '%scf\nMaxIter 1200\nend\n'
         geom_settings = '%geom\nMaxIter 1200\nend\n'
@@ -97,7 +97,7 @@ class Calculator(abc.ABC):
         input_string = self._render_input(atoms=self.atoms,
                                           charge=self.charge,
                                           spin_multiplicity=self.spin_multiplicity,
-                                          xc=self.xc,
+                                          method=self.method,
                                           basis=self.basis,
                                           job=self.get_job_string(),
                                           num_processes=self.num_processes)
