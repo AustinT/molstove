@@ -102,3 +102,43 @@ class OrcaParser:
 
     def get_last_orbitals(self) -> List[Orbital]:
         return self.get_all_orbitals()[-1]
+
+    def get_open_shell_orbitals(self) -> List[List[Orbital]]:
+        orbitals_list = []
+
+        orbital_line = r'\s*\d+\s+(?P<occupation>\d+\.\d+)\s+(?P<energy_ha>-?\d+\.\d+)\s+(?P<energy_ev>-?\d+\.\d+)'
+        orbital_re = re.compile(orbital_line)
+
+        block_re = re.compile(r'-{16}\nORBITAL ENERGIES\n-{16}\n'
+                              r'\s+SPIN UP ORBITALS'
+                              r'\s+NO\s+OCC\s+E\(Eh\)\s+E\(eV\)\s+\n'
+                              r'(?P<spin_up>(\s*\d+\s+(\d+\.\d+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+))+)'
+                              r'\s+SPIN DOWN ORBITALS'
+                              r'\s+NO\s+OCC\s+E\(Eh\)\s+E\(eV\)\s+\n'
+                              r'(?P<spin_down>(\s*\d+\s+(\d+\.\d+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+))+)')
+
+        try:
+            for block in self.find_all(self.output_path, block_re):
+                orbitals = []
+                for orbital_match in orbital_re.finditer(block.group('spin_up')):
+                    orbitals.append(
+                        Orbital(
+                            occupation=float(orbital_match.group('occupation')),
+                            energy=float(orbital_match.group('energy_ha')),
+                        ))
+                for orbital_match in orbital_re.finditer(block.group('spin_down')):
+                    orbitals.append(
+                        Orbital(
+                            occupation=float(orbital_match.group('occupation')),
+                            energy=float(orbital_match.group('energy_ha')),
+                        ))
+
+                orbitals_list.append(sorted(orbitals, key=lambda x: x.energy))
+
+        except (AttributeError, ValueError):
+            raise ParserError('Cannot parse orbital energies')
+
+        return orbitals_list
+
+    def get_last_open_shell_orbitals(self) -> List[Orbital]:
+        return self.get_open_shell_orbitals()[-1]
