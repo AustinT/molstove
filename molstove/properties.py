@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -97,6 +98,61 @@ def max_jsc(e_gap: float) -> float:
             return row['jsc']
 
     return astm_data.iloc[-1]['jsc']
+
+
+# Note: in the SI of Hachmann 2014 (https://doi.org/10.1039/C3EE42756K) it says SVP (TZVP) and not def2-SVP (def2-TZVP).
+# From Hachmann 2011 (https://doi.org/10.1039/C1EE02056K) I understand that the def2 versions have been used throughout.
+
+# HOMO calibration table (in eV)
+# from SI of Hachmann 2014 (https://doi.org/10.1039/C3EE42756K)
+homo_calibration_dict = {
+    'MM//BP86/STO-6G': (0.94834, -2.90981),
+    'MM//BP86/def2-SVP': (1.25426, +0.64981),
+    'BP86/def2-SVP//BP86/def2-SVP': (1.17581, +0.28546),
+    'BP86/def2-SVP//BP86/def2-TZVP': (1.29870, +0.98701),
+    'BP86/def2-SVP//B3LYP/def2-SVP': (0.90417, -0.56441),
+    'BP86/def2-SVP//PBE0/def2-SVP': (0.88687, -0.42198),
+    'BP86/def2-SVP//BHANDHLYP/def2-SVP': (0.70116, -1.02676),
+    'BP86/def2-SVP//M062X/def2-SVP': (0.79705, -0.18793),
+    'BP86/def2-SVP//RHF/def2-SVP': (0.53315, -1.56581),
+    'BP86/def2-SVP//UHF/def2-SVP': (0.54442, -1.48310),
+}
+
+# LUMO calibration table (in eV)
+# from SI of Hachmann 2014 (https://doi.org/10.1039/C3EE42756K)
+lumo_calibration_dict = {
+    'MM//BP86/STO-6G': (0.79431, -3.05172),
+    'MM//BP86/def2-SVP': (1.09994, -0.09982),
+    'BP86/def2-SVP//BP86/def2-SVP': (0.97708, -0.29957),
+    'BP86/def2-SVP//BP86/def2-TZVP': (1.03093, -0.11340),
+    'BP86/def2-SVP//B3LYP/def2-SVP': (0.89573, -1.08427),
+    'BP86/def2-SVP//PBE0/def2-SVP': (0.88449, -1.13753),
+    'BP86/def2-SVP//BHANDHLYP/def2-SVP': (0.82538, -1.97354),
+    'BP86/def2-SVP//M062X/def2-SVP': (0.86214, -1.75827),
+    'BP86/def2-SVP//RHF/def2-SVP': (0.75349, -3.67914),
+    'BP86/def2-SVP//UHF/def2-SVP': (0.75758, -3.75758),
+}
+
+
+def calibrate(
+        orbital_energy: float,  # in eV
+        values: Tuple[float, float],
+) -> float:
+    return values[0] * orbital_energy + values[1]
+
+
+def calibrate_homo(
+        homo: float,  # in eV
+        method: str,
+) -> float:
+    return calibrate(orbital_energy=homo, values=homo_calibration_dict[method])
+
+
+def calibrate_lumo(
+        lumo: float,  # in eV
+        method: str,
+) -> float:
+    return calibrate(orbital_energy=lumo, values=lumo_calibration_dict[method])
 
 
 def calculate_scharber_props(
