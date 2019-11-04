@@ -1,10 +1,11 @@
 import abc
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from shutil import copyfile
 from typing import List, Tuple, Optional
 
 import numpy as np
+import pkg_resources
 
 from molstove import process, parser
 from molstove.parser import Orbital
@@ -12,6 +13,15 @@ from molstove.tools import Atoms
 
 
 class Calculator(abc.ABC):
+    basis_file_dict = {
+        'def2-SVP': 'def2-svp.bas',
+        'def2-TZVP': 'def2-tvp.bas',
+        'STO-6G': 'sto-6g.bas',
+        'def/J': 'def2-universal-jfit.bas',
+    }
+
+    BASIS_SETS_FOLDER = os.path.join('resources', 'basis_sets')
+
     def __init__(
             self,
             atoms: Atoms,
@@ -19,9 +29,10 @@ class Calculator(abc.ABC):
             spin_multiplicity: int,
             basis: str,
             method: str,
+            aux_basis: Optional[str] = None,
             open_shell: bool = False,
             num_processes: int = 1,
-            base_dir: Optional[str] = None,
+            directory: Optional[str] = None,
     ):
         """
         Construct Orca calculator
@@ -31,39 +42,31 @@ class Calculator(abc.ABC):
         :param spin_multiplicity: spin multiplicity of system
         :param basis: orbital basis
         :param method: method to be employed (e.g., exchange correlation functional for DFT)
+        :param aux_basis: auxiliary orbital basis
         :param open_shell: boolean indicating if the calculation is open shell
         :param num_processes: number of mpi processes
-        :param base_dir: base directory of calculation
+        :param directory: base directory of calculation
         """
         self.atoms = atoms
         self.charge = charge
         self.spin_multiplicity = spin_multiplicity
 
         self.basis = basis
+        self.aux_basis = aux_basis
         self.method = method
         self.open_shell = open_shell
 
-        if base_dir is None:
-            base_dir = os.getcwd()
-
-        self.base_dir = base_dir
-        self.calculation_directory = os.path.join(self.base_dir, self._create_tmp_dir_name())
+        self.directory = directory if directory else os.getcwd()
 
         self.num_processes = num_processes
-
-        self.executed = False
 
         self.input_file_name = 'orca.inp'
         self.output_file_name = 'orca.output'
         self.command = f'$(which orca) {self.input_file_name} > {self.output_file_name}'
 
     @staticmethod
-    def _create_tmp_dir_name() -> str:
-        return datetime.now().strftime('%Y%m%dT%H%M%S')
-
-    @staticmethod
     def _create_directory(path: str) -> None:
-        os.makedirs(name=path)
+        os.makedirs(name=path, exist_ok=True)
 
     @staticmethod
     @abc.abstractmethod
@@ -73,23 +76,45 @@ class Calculator(abc.ABC):
         """
         raise NotImplementedError
 
-    @staticmethod
-    def _render_input(atoms: List, charge: int, spin_multiplicity: int, method: str, basis: str, job: str,
-                      num_processes: int) -> str:
-        header = f'! {method} {basis} {job}\n'
-        processes_settings = f'%pal\nnprocs {num_processes}\nend\n'
+    def _render_input(self) -> str:
+        job = self.get_job_string()
+        header = f'! {self.method} {job}\n'
+
+        if self.aux_basis:
+            basis_settings = '%basis\n' \
+                             f'GTOName="{self.basis_file_dict[self.basis]}";\n' \
+                             f'GTOAuxName="{self.basis_file_dict[self.aux_basis]}";\n' \
+                             'end\n'
+        else:
+            basis_settings = '%basis\n' \
+                             f'GTOName="{self.basis_file_dict[self.basis]}";\n' \
+                             'end\n'
+
+        processes_settings = f'%pal\nnprocs {self.num_processes}\nend\n'
         scf_settings = '%scf\nMaxIter 1200\nend\n'
         geom_settings = '%geom\nMaxIter 1200\nend\n'
-        coords_header = f'*xyz {charge} {spin_multiplicity}'
-        coords = '\n'.join([f'{atom.element} {atom.x} {atom.y} {atom.z}' for atom in atoms])
+        coords_header = f'*xyz {self.charge} {self.spin_multiplicity}'
+        coords = '\n'.join([f'{atom.element} {atom.x} {atom.y} {atom.z}' for atom in self.atoms])
         coords_footer = '*'
 
-        return '\n'.join(
-            [header, processes_settings, scf_settings, geom_settings, coords_header, coords, coords_footer])
+        return '\n'.join([
+            header, basis_settings, processes_settings, scf_settings, geom_settings, coords_header, coords,
+            coords_footer
+        ])
 
     def _write_input_file(self, string: str):
-        with open(os.path.join(self.calculation_directory, self.input_file_name), mode='w') as f:
+        with open(os.path.join(self.directory, self.input_file_name), mode='w') as f:
             f.write(string)
+
+    def copy_basis_set_files(self) -> None:
+        for basis in [self.basis, self.aux_basis]:
+            if not basis:
+                continue
+
+            basis_set_file = self.basis_file_dict[basis]
+            src = pkg_resources.resource_filename(__package__, os.path.join(self.BASIS_SETS_FOLDER, basis_set_file))
+            dst = os.path.join(self.directory, basis_set_file)
+            copyfile(src, dst)
 
     def run(self) -> process.ExecutionResult:
         """
@@ -97,21 +122,14 @@ class Calculator(abc.ABC):
 
         :return: ExecutionResult
         """
-        self._create_directory(self.calculation_directory)
+        self._create_directory(self.directory)
 
-        input_string = self._render_input(atoms=self.atoms,
-                                          charge=self.charge,
-                                          spin_multiplicity=self.spin_multiplicity,
-                                          method=self.method,
-                                          basis=self.basis,
-                                          job=self.get_job_string(),
-                                          num_processes=self.num_processes)
-
+        input_string = self._render_input()
         self._write_input_file(string=input_string)
 
-        result = process.execute_command(command=self.command, directory=self.calculation_directory, strict=True)
+        self.copy_basis_set_files()
 
-        self.executed = True
+        result = process.execute_command(command=self.command, directory=self.directory, strict=True)
 
         return result
 
@@ -133,7 +151,7 @@ class SinglePointCalculator(Calculator):
         return 'SP'
 
     def parse_results(self) -> SCFResult:
-        p = parser.OrcaParser(directory=self.calculation_directory, output_file_name=self.output_file_name)
+        p = parser.OrcaParser(directory=self.directory, output_file_name=self.output_file_name)
         p.sanity_check()
 
         if not self.open_shell:
@@ -175,7 +193,7 @@ class StructureOptCalculator(Calculator):
         return 'Opt'
 
     def parse_results(self) -> StructureOptResult:
-        p = parser.OrcaParser(directory=self.calculation_directory, output_file_name=self.output_file_name)
+        p = parser.OrcaParser(directory=self.directory, output_file_name=self.output_file_name)
         p.sanity_check()
 
         return StructureOptResult(atoms=p.get_last_coordinates())

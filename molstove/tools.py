@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List, Union, Sequence
 
 from rdkit.Chem import Mol, AllChem
@@ -68,3 +69,7 @@ def conformer_to_atoms(mol: AllChem.Mol, conformer: AllChem.Conformer) -> Atoms:
 def write_to_json(d: Union[dict, Sequence], path: str) -> None:
     with open(path, mode='w') as f:
         json.dump(d, fp=f)
+
+
+def create_tmp_dir_name() -> str:
+    return datetime.now().strftime('%Y%m%dT%H%M%S')

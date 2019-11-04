@@ -31,7 +31,7 @@ class TestOrca(TestCase):
             method='PBE',
             basis='def2-SVP',
             num_processes=1,
-            base_dir=self.test_dir,
+            directory=self.test_dir,
         )
         c.run()
         results = c.parse_results()
@@ -47,7 +47,7 @@ class TestOrca(TestCase):
             method='PBE',
             basis='def2-SVP',
             num_processes=1,
-            base_dir=self.test_dir,
+            directory=self.test_dir,
         )
         c.run()
         results = c.parse_results()
@@ -62,7 +62,7 @@ class TestOrca(TestCase):
             basis='def2-SVP',
             num_processes=1,
             open_shell=True,
-            base_dir=self.test_dir,
+            directory=self.test_dir,
         )
         c.run()
         results = c.parse_results()
