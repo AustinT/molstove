@@ -15,9 +15,9 @@ from molstove.tools import Atoms
 class Calculator(abc.ABC):
     basis_file_dict = {
         'def2-SVP': 'def2-svp.bas',
-        'def2-TZVP': 'def2-tvp.bas',
+        'def2-TZVP': 'def2-tzvp.bas',
         'STO-6G': 'sto-6g.bas',
-        'def/J': 'def2-universal-jfit.bas',
+        'def2/J': 'def2-universal-jfit.bas',
     }
 
     BASIS_SETS_FOLDER = os.path.join('resources', 'basis_sets')
