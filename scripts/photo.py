@@ -1,30 +1,25 @@
 import dataclasses
 import json
-import time
-from typing import List
+from typing import List, Optional
+
+from rdkit.Chem import Mol
 
 from molstove import tools, conformers, orca, properties
-from molstove.properties import calibrate_homo, calibrate_lumo
+from molstove.properties import calibrate_homo, calibrate_lumo, ScharberResults
+from molstove.tools import Atoms
 
 
 @dataclasses.dataclass
 class CalculationSettings:
     method: str
     basis_set: str
-    aux_basis_set: str
+    aux_basis_set: Optional[str] = None
     open_shell: bool = False
     num_processors: int = 4
 
 
-def compute_pv_props(
-        smiles: str,
-        opt_settings: CalculationSettings,
-        sp_settings_list: List[CalculationSettings],
-) -> List[dict]:
-    # Generate molecule from SMILES
-    mol = tools.mol_from_smiles(smiles)
-
-    # Generate conformers
+def generate_conformers(mol: Mol) -> List[Atoms]:
+    # Generate conformers, optimize them, and collect clusters
     conformers.generate_conformers(mol, max_num_conformers=25, seed=42)
     energies = conformers.minimize_conformers(mol)
     conformer_list = conformers.collect_clusters(
@@ -37,80 +32,120 @@ def compute_pv_props(
     )
 
     # Convert conformers to PySCF format
-    atoms_list = [tools.conformer_to_atoms(mol=mol, conformer=conformer) for conformer in conformer_list]
+    return [tools.conformer_to_atoms(mol=mol, conformer=conformer) for conformer in conformer_list]
+
+
+def optimize_structure(atoms: Atoms, charge: int, spin_multiplicity: int, settings: CalculationSettings) -> Atoms:
+    c = orca.StructureOptCalculator(
+        atoms=atoms,
+        charge=charge,
+        spin_multiplicity=spin_multiplicity,
+        basis=settings.basis_set,
+        aux_basis=settings.aux_basis_set,
+        method=settings.method,
+        open_shell=settings.open_shell,
+        num_processes=settings.num_processors,
+        directory=tools.create_tmp_dir_name(),
+    )
+    c.run()
+    opt_results = c.parse_results()
+    return opt_results.atoms
+
+
+def compute_scharber_properties(atoms: Atoms, charge: int, spin_multiplicity: int, settings: CalculationSettings,
+                                opt_method: str) -> dict:
+    c = orca.SinglePointCalculator(
+        atoms=atoms,
+        charge=charge,
+        spin_multiplicity=spin_multiplicity,
+        basis=settings.basis_set,
+        aux_basis=settings.aux_basis_set,
+        method=settings.method,
+        open_shell=settings.open_shell,
+        num_processes=settings.num_processors,
+        directory=tools.create_tmp_dir_name(),
+    )
+    c.run()
+    results = c.parse_results()
+
+    method = f'{opt_method}//{settings.method}/{settings.basis_set}'
+    scharber_results = get_calibrated_scharber_predictions(method=method, homo=results.homo, lumo=results.lumo)
+    report = {
+        'path': c.directory,
+        'method': method,
+    }
+    report.update(dataclasses.asdict(scharber_results))
+    return report
+
+
+def get_calibrated_scharber_predictions(method: str, homo: float, lumo: float) -> ScharberResults:
+    homo_calibrated = calibrate_homo(homo=homo * tools.EV_PER_HARTREE, method=method)
+    lumo_calibrated = calibrate_lumo(lumo=lumo * tools.EV_PER_HARTREE, method=method)
+    return properties.calculate_scharber_props(homo=homo_calibrated, lumo=lumo_calibrated)
+
+
+def compute_hopv_props(smiles: str, num_processors: int) -> List[dict]:
+    # Generate molecule from SMILES
+    mol = tools.mol_from_smiles(smiles)
     charge = tools.get_molecular_charge(mol)
     spin_multiplicity = 1
 
+    confs = generate_conformers(mol)
+
     reports = []
 
-    # Run QC calculations and get predictions based on Scharber model
-    for i, atoms in enumerate(atoms_list):
-        try:
-            opt_start = time.time()
+    # Run QC single point calculations on MM optimized structures
+    settings_list = [
+        CalculationSettings(method='BP86', basis_set='def2-SVP', aux_basis_set='def2/J', num_processors=num_processors),
+        CalculationSettings(method='BP86', basis_set='STO-6G', num_processors=num_processors),
+    ]
 
-            c = orca.StructureOptCalculator(
-                atoms=atoms,
-                charge=charge,
-                spin_multiplicity=spin_multiplicity,
-                basis=f'{opt_settings.basis_set} {opt_settings.aux_basis_set}',
-                method=opt_settings.method,
-                open_shell=opt_settings.open_shell,
-                num_processes=opt_settings.num_processors,
-            )
-            c.run()
-            opt_results = c.parse_results()
-            opt_atoms = opt_results.atoms
+    # Optimize conformers
+    for conf in confs:
+        for settings in settings_list:
+            results = compute_scharber_properties(atoms=conf,
+                                                  charge=charge,
+                                                  spin_multiplicity=spin_multiplicity,
+                                                  settings=settings,
+                                                  opt_method='MM')
+            reports.append(results)
 
-            opt_time = time.time() - opt_start
+    opt_settings = CalculationSettings(method='BP86',
+                                       basis_set='def2-SVP',
+                                       aux_basis_set='def2/J',
+                                       num_processors=num_processors)
 
-            for sp_settings in sp_settings_list:
-                sp_start = time.time()
+    opt_confs = []
+    for conf in confs:
+        opt_confs.append(
+            optimize_structure(atoms=conf, charge=charge, spin_multiplicity=spin_multiplicity, settings=opt_settings))
 
-                c = orca.SinglePointCalculator(
-                    atoms=opt_atoms,
-                    charge=charge,
-                    spin_multiplicity=spin_multiplicity,
-                    basis=f'{sp_settings.basis_set} {sp_settings.aux_basis_set}',
-                    method=sp_settings.method,
-                    open_shell=sp_settings.open_shell,
-                    num_processes=sp_settings.num_processors,
-                )
-                c.run()
-                sp_results = c.parse_results()
-                homo, lumo = sp_results.homo, sp_results.lumo
+    # Run QC single point calculations on QC optimized structures
+    settings_list = [
+        CalculationSettings(method=method, basis_set='def2-SVP', aux_basis_set='def2/J', num_processors=num_processors)
+        for method in ['BP86', 'B3LYP', 'PBE0', 'BHANDHLYP', 'M062X', 'RHF']
+    ]
 
-                sp_time = time.time() - sp_start
+    settings_list.append(
+        CalculationSettings(method='UHF',
+                            basis_set='def2-SVP',
+                            aux_basis_set='def2/J',
+                            open_shell=True,
+                            num_processors=num_processors))
 
-                method = f'{opt_settings.method}/{opt_settings.basis_set}//' \
-                         f'{sp_settings.method}/{sp_settings.basis_set}'
-                homo_calibrated = calibrate_homo(homo=homo * tools.EV_PER_HARTREE, method=method)
-                lumo_calibrated = calibrate_lumo(lumo=lumo * tools.EV_PER_HARTREE, method=method)
-                scharber = properties.calculate_scharber_props(homo=homo_calibrated, lumo=lumo_calibrated)
+    settings_list.append(
+        CalculationSettings(method='BP86', basis_set='def2-TZVP', aux_basis_set='def2/J',
+                            num_processors=num_processors))
 
-                report = {
-                    'smiles': smiles,
-                    'atoms': [dataclasses.asdict(atom) for atom in opt_atoms],
-                    'charge': charge,
-                    'spin_multiplicity': spin_multiplicity,
-                    'basis_set': sp_settings.basis_set,
-                    'basis_set_opt': opt_settings.basis_set,
-                    'method': sp_settings.method,
-                    'method_opt': opt_settings.method,
-                    'homo': homo,
-                    'lumo': lumo,
-                    'energy': sp_results.energy,
-                    'path': c.calculation_directory,
-                }
-
-                report.update(dataclasses.asdict(scharber))
-                report['smiles'] = smiles
-                report['opt_time'] = opt_time
-                report['sp_time'] = sp_time
-
-                reports.append(report)
-
-        except RuntimeError as e:
-            print(f'Calculations for conformer {i} failed: {e}')
+    opt_method = f'{opt_settings.method}/{opt_settings.basis_set}'
+    for conf in opt_confs:
+        for settings in settings_list:
+            results = compute_scharber_properties(atoms=conf,
+                                                  charge=charge,
+                                                  spin_multiplicity=spin_multiplicity,
+                                                  settings=settings,
+                                                  opt_method=opt_method)
+            reports.append(results)
 
     return reports
 
@@ -131,33 +166,14 @@ def main():
         'C1C=Cc2c1csc2-c1cc2cnc3c4[nH]ccc4c4=C[SiH2]C=c4c3c2c2=C[SiH2]C=c12',
     ]
 
-    opt_settings = CalculationSettings(method='BP86',
-                                       basis_set='def2-SVP',
-                                       aux_basis_set='def2/J',
-                                       num_processors=num_processors)
-
-    sp_settings_list = [
-        CalculationSettings(method=method, basis_set='def2-SVP', aux_basis_set='def2/J', num_processors=num_processors)
-        for method in ['BP86', 'B3LYP', 'PBE0', 'BHANDHLYP', 'M062X', 'RHF']
-    ]
-
-    sp_settings_list.append(
-        CalculationSettings(method='UHF',
-                            basis_set='def2-SVP',
-                            aux_basis_set='def2/J',
-                            open_shell=True,
-                            num_processors=num_processors))
-
-    sp_settings_list.append(
-        CalculationSettings(method='BP86', basis_set='def2-TZVP', aux_basis_set='def2/J',
-                            num_processors=num_processors))
-
     for i, smiles in enumerate(smiles_list):
         print(smiles)
         try:
-            report = compute_pv_props(smiles, opt_settings=opt_settings, sp_settings_list=sp_settings_list)
+            reports = compute_hopv_props(smiles, num_processors=num_processors)
+            for item in reports:
+                item['smiles'] = smiles
             with open(f'report_{i}.json', mode='w') as f:
-                json.dump(report, f)
+                json.dump(reports, f)
         except Exception as e:
             print(e)
 
