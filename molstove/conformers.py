@@ -77,12 +77,12 @@ def collect_clusters(mol: Mol,
             break
 
         # If conformer too high in energy, break
-        if energy - min_energy > energy_window:
+        if abs(energy - min_energy) > energy_window:
             break
 
         for accepted_id, accepted_energy in accepted_list:
             # If energy is too similar, structures are likely to be similar as well
-            if energy - accepted_energy < delta_e_threshold:
+            if abs(energy - accepted_energy) < delta_e_threshold:
                 duplicated = True
                 break
 
