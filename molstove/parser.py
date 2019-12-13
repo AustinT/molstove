@@ -1,15 +1,8 @@
 import os
 import re
-from dataclasses import dataclass
 from typing import List
 
-from molstove.tools import Atoms, Atom
-
-
-@dataclass
-class Orbital:
-    occupation: float
-    energy: float  # Hartree
+from molstove.tools import Atoms, Atom, Orbital
 
 
 class ParserError(Exception):

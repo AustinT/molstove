@@ -1,8 +1,9 @@
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Union, Sequence
+from typing import List, Union, Sequence, Tuple
 
+import numpy as np
 from rdkit.Chem import Mol, AllChem
 
 ANGSTROM_PER_BOHR = 0.529177  # Angstrom / Bohr
@@ -21,6 +22,12 @@ class Atom:
 
 
 Atoms = List[Atom]
+
+
+@dataclass
+class Orbital:
+    occupation: float
+    energy: float  # Hartree
 
 
 def mol_from_smiles(smiles: str) -> Mol:
@@ -73,3 +80,18 @@ def write_to_json(d: Union[dict, Sequence], path: str) -> None:
 
 def create_tmp_dir_name() -> str:
     return datetime.now().strftime('%Y%m%dT%H%M%S')
+
+
+def get_homo_lumo_energies(orbitals: List[Orbital], is_open_shell: bool) -> Tuple[float, float]:
+    homo, lumo = 0.0, 0.0
+    occupied = 1.0 if is_open_shell else 2.0
+    for i, orbital in enumerate(orbitals):
+        if np.isclose(orbital.occupation, occupied):
+            homo = orbital.energy
+        elif np.isclose(orbital.occupation, 0.0):
+            lumo = orbital.energy
+            break
+        else:
+            raise RuntimeError(f'Cannot determine if HOMO or LUMO ({orbital.energy})')
+
+    return homo, lumo

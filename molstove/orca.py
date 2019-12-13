@@ -2,13 +2,11 @@ import abc
 import os
 from dataclasses import dataclass
 from shutil import copyfile
-from typing import List, Tuple, Optional
+from typing import Optional
 
-import numpy as np
 import pkg_resources
 
-from molstove import process, parser
-from molstove.parser import Orbital
+from molstove import process, parser, tools
 from molstove.tools import Atoms
 
 
@@ -159,27 +157,13 @@ class SinglePointCalculator(Calculator):
         else:
             orbitals = p.get_last_open_shell_orbitals()
 
-        homo, lumo = self._get_homo_lumo_energies(orbitals)
+        homo, lumo = tools.get_homo_lumo_energies(orbitals, is_open_shell=self.open_shell)
 
         return SCFResult(
             energy=p.get_last_final_single_point_energies(),
             homo=homo,
             lumo=lumo,
         )
-
-    def _get_homo_lumo_energies(self, orbitals: List[Orbital]) -> Tuple[float, float]:
-        homo, lumo = 0.0, 0.0
-        occupied = 1.0 if self.open_shell else 2.0
-        for i, orbital in enumerate(orbitals):
-            if np.isclose(orbital.occupation, occupied):
-                homo = orbital.energy
-            elif np.isclose(orbital.occupation, 0.0):
-                lumo = orbital.energy
-                break
-            else:
-                raise RuntimeError(f'Cannot determine if HOMO or LUMO ({orbital.energy})')
-
-        return homo, lumo
 
 
 @dataclass
