@@ -2,6 +2,7 @@ import dataclasses
 import json
 from typing import List, Optional
 
+import numpy as np
 from rdkit.Chem import Mol
 
 from molstove import tools, conformers, orca, properties
@@ -79,9 +80,14 @@ def compute_scharber_properties(atoms: Atoms, charge: int, spin_multiplicity: in
 
 
 def get_calibrated_scharber_predictions(method: str, homo: float, lumo: float) -> ScharberResults:
-    homo_calibrated = calibrate_homo(homo=homo * tools.EV_PER_HARTREE, method=method)
-    lumo_calibrated = calibrate_lumo(lumo=lumo * tools.EV_PER_HARTREE, method=method)
-    return properties.calculate_scharber_props(homo=homo_calibrated, lumo=lumo_calibrated)
+    try:
+        homo_calibrated = calibrate_homo(homo=homo * tools.EV_PER_HARTREE, method=method)
+        lumo_calibrated = calibrate_lumo(lumo=lumo * tools.EV_PER_HARTREE, method=method)
+        return properties.calculate_scharber_props(homo=homo_calibrated, lumo=lumo_calibrated)
+    except RuntimeError as e:
+        print(f'Method {method} returned the following error when calculating Scharber properties: {e}')
+        return ScharberResults(pce=np.nan, voc=np.nan, jsc=np.nan, ff=np.nan, eqe=np.nan, lumo_acceptor=np.nan,
+                               e_charge_sep=np.nan, e_empirical_loss=np.nan)
 
 
 def compute_hopv_props(smiles: str, num_processors: int) -> List[dict]:
