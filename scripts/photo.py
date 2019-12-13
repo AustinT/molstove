@@ -21,13 +21,13 @@ class CalculationSettings:
 
 def generate_conformers(mol: Mol) -> List[Atoms]:
     # Generate conformers, optimize them, and collect clusters
-    conformers.generate_conformers(mol, max_num_conformers=25, seed=42)
+    conformers.generate_conformers(mol, max_num_conformers=100, seed=42)
     energies = conformers.minimize_conformers(mol)
     conformer_list = conformers.collect_clusters(
         mol=mol,
         energies=energies,
         rmsd_threshold=0.1,
-        delta_e_threshold=5,
+        delta_e_threshold=2,
         energy_window=10,
         max_num_conformers=5,
     )
