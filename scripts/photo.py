@@ -172,6 +172,14 @@ def main():
         'C1C=Cc2c1csc2-c1cc2cnc3c4[nH]ccc4c4=C[SiH2]C=c4c3c2c2=C[SiH2]C=c12',
     ]
 
+    # From: http://www.rsc.org/suppdata/ee/c3/c3ee42756k/c3ee42756k.pdf
+    # smiles_list = [
+    #     'c1sc(-c2ccc(cn2)-c2[SiH2]c(cc2)-c2nccc3nsnc23)c2sccc12',  # 11.13
+    #     'c1cnc(-c2cnc3c(c2)c2=C[SiH2]C=c2c2ccc4cscc4c32)c2nsnc12',  # 11.13
+    #     'c1cc2ncc3c4c5cocc5c(cc4c4=C[SiH2]C=c4c3c2o1)-c1nccc2nsnc12',  # 11.12
+    #     'c1ccc(-c2cc3c4nsnc4c4ccc5=C[SiH2]C=c5c4c3c3nsnc23)c2=C[SiH2]C=c12',  # 11.12
+    # ]
+
     for i, smiles in enumerate(smiles_list):
         print(smiles)
         try:
