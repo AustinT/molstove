@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
-from datetime import datetime
 from typing import List, Union, Sequence, Tuple
+import uuid
 
 import numpy as np
 from rdkit.Chem import Mol, AllChem
@@ -79,7 +79,10 @@ def write_to_json(d: Union[dict, Sequence], path: str) -> None:
 
 
 def create_tmp_dir_name() -> str:
-    return datetime.now().strftime('%Y%m%dT%H%M%S')
+    """
+    Make a temporary dir name, based on a random string
+    """
+    return uuid.uuid4().hex
 
 
 def get_homo_lumo_energies(orbitals: List[Orbital], is_open_shell: bool) -> Tuple[float, float]:
