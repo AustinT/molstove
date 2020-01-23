@@ -73,7 +73,7 @@ def compute_scharber_properties(atoms: Atoms, charge: int, spin_multiplicity: in
     method = f'{opt_method}//{settings.method}/{settings.basis_set}'
     scharber_results = get_calibrated_scharber_predictions(method=method, homo=results.homo, lumo=results.lumo)
     report = {
-        'path': c.directory,
+        'path': str(c.directory),
         'method': method,
     }
     report.update(dataclasses.asdict(scharber_results))

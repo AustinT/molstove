@@ -1,6 +1,7 @@
 import os
 import signal
 import subprocess
+import pathlib
 from typing import Optional
 
 
@@ -42,8 +43,9 @@ class ExecutionError(Exception):
                                                                                  self.stderr, self.return_code)
 
 
-def execute_command(command: str, directory: Optional[str] = None, strict: bool = True) -> ExecutionResult:
-    cwd = os.getcwd()
+def execute_command(command: str, directory: Optional[pathlib.Path] = None,
+                    strict: bool = True) -> ExecutionResult:
+    cwd = pathlib.Path.cwd()
 
     try:
         if directory is not None:

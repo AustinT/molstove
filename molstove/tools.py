@@ -1,7 +1,9 @@
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List, Union, Sequence, Tuple
 import uuid
+from pathlib import Path
 
 import numpy as np
 from rdkit.Chem import Mol, AllChem
@@ -11,6 +13,7 @@ BOHR_PER_ANGSTROM = 1 / ANGSTROM_PER_BOHR  # Bohr / Angstrom
 
 EV_PER_HARTREE = 27.21138602  # eV / Hartree
 HARTREE_PER_EV = 1 / EV_PER_HARTREE  # Hartree / eV
+CALC_DIR_NAME = "orca-calc"
 
 
 @dataclass
@@ -75,14 +78,19 @@ def conformer_to_atoms(mol: AllChem.Mol, conformer: AllChem.Conformer) -> Atoms:
 
 def write_to_json(d: Union[dict, Sequence], path: str) -> None:
     with open(path, mode='w') as f:
-        json.dump(d, fp=f)
+        json.dump(d, fp=f, indent=4)  # Indent to make human-readable
 
 
-def create_tmp_dir_name() -> str:
+def create_tmp_dir_name(include_base_dir=True) -> Path:
     """
-    Make a temporary dir name, based on a random string
+    Make a temporary dir name, based on a random string and the date
     """
-    return uuid.uuid4().hex
+    date_str = datetime.now().strftime('%Y%m%dT%H%M%S')
+    random_hex_str = uuid.uuid4().hex
+    tmp_dir_name = Path(random_hex_str + "_" + date_str)
+    if include_base_dir:
+        return Path(CALC_DIR_NAME) / tmp_dir_name
+    return tmp_dir_name
 
 
 def get_homo_lumo_energies(orbitals: List[Orbital], is_open_shell: bool) -> Tuple[float, float]:

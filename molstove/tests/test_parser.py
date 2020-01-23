@@ -1,4 +1,5 @@
 from unittest import TestCase
+from pathlib import Path
 
 import pkg_resources
 
@@ -8,10 +9,12 @@ RESOURCES_FOLDER = 'resources'
 
 
 class TestOrcaParser(TestCase):
-    RESOURCES = pkg_resources.resource_filename(__package__, RESOURCES_FOLDER)
+    RESOURCES = Path(
+        pkg_resources.resource_filename(__package__, RESOURCES_FOLDER))
 
     def test_sanity_check(self):
-        p = OrcaParser(directory=self.RESOURCES, output_file_name='orca.output')
+        p = OrcaParser(directory=self.RESOURCES,
+                       output_file_name='orca.output')
         self.assertIsNone(p.sanity_check())  # type: ignore
 
     def test_sanity_check_fail(self):

@@ -1,15 +1,16 @@
 import shutil
 import tempfile
+from pathlib import Path
 from unittest import TestCase
 
 from molstove import orca
-from molstove.tools import Atom
+from molstove.tools import Atom, create_tmp_dir_name
 
 
 class TestOrca(TestCase):
     def setUp(self):
         # Create a temporary directory
-        self.test_dir = tempfile.mkdtemp()
+        self.test_dir = Path(tempfile.mkdtemp())
 
         self.atoms = [
             Atom('H', 0, 0, 0),
@@ -31,7 +32,7 @@ class TestOrca(TestCase):
             method='PBE',
             basis='def2-SVP',
             num_processes=1,
-            directory=self.test_dir,
+            directory=self.test_dir / create_tmp_dir_name(False),
         )
         c.run()
         results = c.parse_results()
@@ -47,7 +48,7 @@ class TestOrca(TestCase):
             method='PBE',
             basis='def2-SVP',
             num_processes=1,
-            directory=self.test_dir,
+            directory=self.test_dir / create_tmp_dir_name(False),
         )
         c.run()
         results = c.parse_results()
@@ -62,7 +63,7 @@ class TestOrca(TestCase):
             basis='def2-SVP',
             num_processes=1,
             open_shell=True,
-            directory=self.test_dir,
+            directory=self.test_dir / create_tmp_dir_name(False),
         )
         c.run()
         results = c.parse_results()

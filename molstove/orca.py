@@ -1,5 +1,5 @@
 import abc
-import os
+import pathlib
 from dataclasses import dataclass
 from shutil import copyfile
 from typing import Optional
@@ -18,7 +18,7 @@ class Calculator(abc.ABC):
         'def2/J': 'def2-universal-jfit.bas',
     }
 
-    BASIS_SETS_FOLDER = os.path.join('resources', 'basis_sets')
+    BASIS_SETS_FOLDER = pathlib.Path('resources') / 'basis_sets'
 
     def __init__(
             self,
@@ -30,7 +30,7 @@ class Calculator(abc.ABC):
             aux_basis: Optional[str] = None,
             open_shell: bool = False,
             num_processes: int = 1,
-            directory: Optional[str] = None,
+            directory: Optional[pathlib.Path] = None,
     ):
         """
         Construct Orca calculator
@@ -54,17 +54,13 @@ class Calculator(abc.ABC):
         self.method = method
         self.open_shell = open_shell
 
-        self.directory = directory if directory else os.getcwd()
+        self.directory = directory if directory else pathlib.Path.cwd()
 
         self.num_processes = num_processes
 
         self.input_file_name = 'orca.inp'
         self.output_file_name = 'orca.output'
         self.command = f'$(which orca) {self.input_file_name} > {self.output_file_name}'
-
-    @staticmethod
-    def _create_directory(path: str) -> None:
-        os.makedirs(name=path, exist_ok=True)
 
     @staticmethod
     @abc.abstractmethod
@@ -101,7 +97,7 @@ class Calculator(abc.ABC):
         ])
 
     def _write_input_file(self, string: str):
-        with open(os.path.join(self.directory, self.input_file_name), mode='w') as f:
+        with open(self.directory / self.input_file_name, mode="w") as f:
             f.write(string)
 
     def copy_basis_set_files(self) -> None:
@@ -110,8 +106,9 @@ class Calculator(abc.ABC):
                 continue
 
             basis_set_file = self.basis_file_dict[basis]
-            src = pkg_resources.resource_filename(__package__, os.path.join(self.BASIS_SETS_FOLDER, basis_set_file))
-            dst = os.path.join(self.directory, basis_set_file)
+            basis_set_file_path = self.BASIS_SETS_FOLDER / basis_set_file
+            src = pkg_resources.resource_filename(__package__, str(basis_set_file_path))
+            dst = self.directory / basis_set_file
             copyfile(src, dst)
 
     def run(self) -> process.ExecutionResult:
@@ -120,7 +117,7 @@ class Calculator(abc.ABC):
 
         :return: ExecutionResult
         """
-        self._create_directory(self.directory)
+        self.directory.mkdir(parents=True, exist_ok=False)
 
         input_string = self._render_input()
         self._write_input_file(string=input_string)
