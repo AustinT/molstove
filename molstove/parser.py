@@ -1,4 +1,4 @@
-import os
+import pathlib
 import re
 from typing import List
 
@@ -11,10 +11,10 @@ class ParserError(Exception):
 
 class OrcaParser:
     """Parser for ORCA calculations"""
-    def __init__(self, directory: str, output_file_name, xyz_file_name: str = 'orca.xyz') -> None:
+    def __init__(self, directory: pathlib.Path, output_file_name, xyz_file_name: str = 'orca.xyz') -> None:
         self.directory = directory
-        self.output_path = os.path.join(self.directory, output_file_name)
-        self.xyz_path = os.path.join(self.directory, xyz_file_name)
+        self.output_path = self.directory / output_file_name
+        self.xyz_path = self.directory / xyz_file_name
 
     @staticmethod
     def find(file_path: str, pattern, exactly_one=True):

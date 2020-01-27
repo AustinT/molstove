@@ -51,4 +51,5 @@ class TestConformers(TestCase):
         energies = conformers.minimize_conformers(mol)
         clusters = conformers.collect_clusters(mol, energies=energies)
 
-        self.assertEqual(len(clusters), 3)
+        # 3 or 4 clusters (depends on version)
+        self.assertIn(len(clusters), {3,4})

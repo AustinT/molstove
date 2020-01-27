@@ -1,7 +1,7 @@
 from typing import Tuple, List
 
+from rdkit import Chem
 from rdkit.Chem import Mol, AllChem
-from rdkit.Chem.rdForceFieldHelpers import MMFFGetMoleculeProperties, MMFFGetMoleculeForceField
 from rdkit.Chem.rdMolAlign import AlignMol
 
 
@@ -26,20 +26,47 @@ def generate_conformers(mol: Mol, max_num_conformers: int, seed: int = 42) -> in
     return len(ids)
 
 
-def minimize_conformers(mol: Mol) -> List[float]:
+def minimize_conformers(mol: Mol, max_iters: int = 10000,
+                        fix_se_error: bool = True) -> List[float]:
     """
     Minimize conformers in molecule and return their energies (in kcal/mol).
 
     :param mol: molecule containing conformers to be optimized
     :return: list of energies in kcal/mol
     """
+
+    # Determine whether MMFF potentials can be used,
+    # or whether one must fall back to UFF potentials
+    if AllChem.MMFFHasAllMoleculeParams(mol):
+        optimization_method = AllChem.MMFFOptimizeMoleculeConfs
+    else:
+        optimization_method = AllChem.UFFOptimizeMoleculeConfs
+
+        # Change the hybridization of selenium to account for a bug
+        # in the UFF potential behaviour
+        if fix_se_error:
+            print("Warning: changing Se geometries to SP3")
+            for a in mol.GetAtoms():
+                if a.GetSymbol() == "Se":
+                    a.SetHybridization(Chem.rdchem.HybridizationType.SP3)
+
+    # Run the optimizations for a really long time
+    opt_results = optimization_method(mol, maxIters=max_iters)
+
+    # Discard any conformers that don't work
     energies = []
-    props = MMFFGetMoleculeProperties(mol)
-    for i in range(mol.GetNumConformers()):
-        potential = MMFFGetMoleculeForceField(mol, props, confId=i)
-        potential.Minimize()
-        energy = potential.CalcEnergy()
-        energies.append(energy)
+    for idx, (not_converged, energy) in enumerate(opt_results):
+        if not_converged:
+            mol.RemoveConformer(idx)
+        else:
+            energies.append(energy)
+    assert len(energies) == mol.GetNumConformers(), \
+        (len(energies), mol.GetNumConformers())
+
+    # Re-index the conformers, to account for the ones removed
+    conf_list = sorted([(c.GetId(), c) for c in mol.GetConformers()])
+    for idx, (old_id, c) in enumerate(conf_list):
+        c.SetId(idx)
 
     return energies
 
