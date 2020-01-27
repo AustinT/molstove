@@ -4,7 +4,6 @@ from typing import List, Optional
 
 import numpy as np
 from rdkit.Chem import Mol
-from tqdm import tqdm
 
 from molstove import tools, conformers, orca, properties
 from molstove.properties import calibrate_homo, calibrate_lumo, ScharberResults
@@ -181,7 +180,7 @@ def main():
     #     'c1ccc(-c2cc3c4nsnc4c4ccc5=C[SiH2]C=c5c4c3c3nsnc23)c2=C[SiH2]C=c12',  # 11.12
     # ]
 
-    for i, smiles in enumerate(tqdm(smiles_list)):
+    for i, smiles in enumerate(smiles_list):
         print(smiles, flush=True)
         try:
             reports = compute_hopv_props(smiles, num_processors=num_processors)

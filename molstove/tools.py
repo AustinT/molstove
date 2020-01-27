@@ -87,7 +87,7 @@ def create_tmp_dir_name(include_base_dir=True) -> Path:
     """
     date_str = datetime.now().strftime('%Y%m%dT%H%M%S')
     random_hex_str = uuid.uuid4().hex
-    tmp_dir_name = Path(random_hex_str + "_" + date_str)
+    tmp_dir_name = Path(date_str + "_" + random_hex_str)
     if include_base_dir:
         return Path(CALC_DIR_NAME) / tmp_dir_name
     return tmp_dir_name
