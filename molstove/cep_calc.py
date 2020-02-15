@@ -27,6 +27,7 @@ class CalculationSettings:
 def generate_conformers(mol: Mol) -> List[Atoms]:
     # Generate conformers, optimize them, and collect clusters
     conformers.generate_conformers(mol, max_num_conformers=100, seed=42)
+    assert mol.GetNumConformers() > 0  # some molecules are unphysical
     energies = conformers.minimize_conformers(mol)
     conformer_list = conformers.collect_clusters(
         mol=mol,
@@ -66,9 +67,9 @@ def optimize_structure(atoms: Atoms, charge: int, spin_multiplicity: int,
 
 
 def compute_calibrated_homo_lumo(atoms: Atoms, charge: int,
-                                spin_multiplicity: int,
-                                settings: CalculationSettings,
-                                opt_method: str) -> dict:
+                                 spin_multiplicity: int,
+                                 settings: CalculationSettings,
+                                 opt_method: str) -> dict:
     c = orca.SinglePointCalculator(
         atoms=atoms,
         charge=charge,
@@ -117,9 +118,16 @@ def cep_calculation_suite(smiles: str, num_processors: int) -> List[dict]:
 
     # Run QC single point calculations on MM optimized structures
     settings_list = [
-        CalculationSettings(method='BP86', basis_set='def2-SVP', aux_basis_set='def2/J', num_processors=num_processors),
-        CalculationSettings(method='BP86', basis_set='STO-6G', num_processors=num_processors),
-    ]
+        CalculationSettings(
+            method='BP86',
+            basis_set='def2-SVP',
+            aux_basis_set='def2/J',
+            num_processors=num_processors),
+        CalculationSettings(
+            method='BP86',
+            basis_set='STO-6G',
+            num_processors=num_processors),
+             ]
 
     # Optimize conformers
     for conf in confs:
@@ -160,17 +168,18 @@ def cep_calculation_suite(smiles: str, num_processors: int) -> List[dict]:
                             num_processors=num_processors))
 
     settings_list.append(
-        CalculationSettings(method='BP86', basis_set='def2-TZVP', aux_basis_set='def2/J',
-                            num_processors=num_processors))
+        CalculationSettings(
+            method='BP86',
+            basis_set='def2-TZVP',
+            aux_basis_set='def2/J',
+            num_processors=num_processors))
 
     opt_method = f'{opt_settings.method}/{opt_settings.basis_set}'
     for conf in opt_confs:
         for settings in settings_list:
-            results = compute_calibrated_homo_lumo(atoms=conf,
-                                                   charge=charge,
-                                                   spin_multiplicity=spin_multiplicity,
-                                                   settings=settings,
-                                                   opt_method=opt_method)
+            results = compute_calibrated_homo_lumo(
+                atoms=conf, charge=charge, spin_multiplicity=spin_multiplicity,
+                settings=settings, opt_method=opt_method)
             reports.append(results)
 
     return reports
